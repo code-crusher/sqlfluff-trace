@@ -120,6 +120,38 @@ test_bare_functions_4:
       capitalisation.functions:
         extended_capitalisation_policy: snake
 
+test_pass_db2_multi_word_bare_function:
+  # Db2's bare functions are composite segments (`CURRENT DATE` is two
+  # keywords), so they aren't a single function name to recase. Issue 8883:
+  # this used to raise NotImplementedError from `BaseSegment.edit()`.
+  pass_str: SELECT lower(a), CURRENT DATE FROM t
+  configs:
+    core:
+      dialect: db2
+    rules:
+      capitalisation.functions:
+        extended_capitalisation_policy: lower
+
+test_pass_db2_multi_word_bare_function_upper_policy:
+  pass_str: SELECT LOWER(a), CURRENT DATE FROM t
+  configs:
+    core:
+      dialect: db2
+    rules:
+      capitalisation.functions:
+        extended_capitalisation_policy: upper
+
+test_pass_db2_single_token_bare_function:
+  # Even single-token Db2 bare functions are composite (a lone keyword
+  # child), so CP03 leaves them to CP01, which owns keyword case.
+  pass_str: SELECT current_date, LOWER(a) FROM t
+  configs:
+    core:
+      dialect: db2
+    rules:
+      capitalisation.functions:
+        extended_capitalisation_policy: upper
+
 test_pass_clickhouse_case_sensitive_functions:
   pass_str: SELECT randCanonical(), randBinomial(24, 0.5)
   configs:

@@ -64,8 +64,15 @@ class Rule_CP03(Rule_CP01):
     _description_elem = "Function names"
 
     def _eval(self, context: RuleContext) -> Optional[list[LintResult]]:
-        """Preserve case-sensitive ClickHouse function names."""
+        """Skip constructs this rule can't recase as a single function name."""
         if context.dialect.name == "clickhouse":
+            return None
+        # Some dialects (e.g. Db2) define `bare_function` as a composite
+        # segment rather than a single token: `CURRENT DATE` is two keywords.
+        # Such a segment isn't one function name and can't be edited as one,
+        # so skip it. Its constituent keywords are handled by CP01, and the
+        # Rust path only targets leaves anyway, so this keeps parity.
+        if context.segment.is_type("bare_function") and not context.segment.is_raw():
             return None
         return super()._eval(context)
 
