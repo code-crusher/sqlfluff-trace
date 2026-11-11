@@ -1111,7 +1111,15 @@ def lint(
         result.persist_timing_records(persist_timing)
 
     output_stream.close()
-    if bench:
+    # `--bench` writes a plain-text summary to stdout, which would corrupt any
+    # machine-readable payload written there. Only print it when stdout doesn't
+    # carry such a payload (i.e. for `human`/`none`, or when `--write-output`
+    # redirects the payload). This mirrors how `parse` handles `--bench`.
+    machine_payload_on_stdout = write_output is None and format not in (
+        FormatType.human.value,
+        FormatType.none.value,
+    )
+    if bench and not machine_payload_on_stdout:
         click.echo("==== overall timings ====")
         click.echo(formatter.cli_table([("Clock time", result.total_time)]))
         timing_summary = result.timing_summary()

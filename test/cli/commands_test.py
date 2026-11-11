@@ -906,6 +906,81 @@ def test__cli__parse_verbosity_thresholds(args, file_timings, overall_timings):
     assert ("==== overall timings ====" in result.stdout) is overall_timings
 
 
+@pytest.mark.parametrize(
+    ("serialize", "loader"),
+    [
+        ("json", json.loads),
+        ("yaml", yaml.safe_load),
+    ],
+)
+def test__cli__lint_bench_machine_output_stays_serialized(serialize, loader):
+    """--bench must not corrupt machine-readable output on stdout.
+
+    See https://github.com/sqlfluff/sqlfluff/issues/8490
+    """
+    result = invoke_assert_code(
+        ret_code=0,
+        args=[
+            lint,
+            [
+                "--format",
+                serialize,
+                "--bench",
+                "--dialect",
+                "ansi",
+                "--disable-progress-bar",
+                "test/fixtures/cli/passing_a.sql",
+            ],
+        ],
+    )
+    # The whole of stdout must be a single valid payload.
+    loader(result.stdout)
+    assert "==== overall timings ====" not in result.stdout
+
+
+@pytest.mark.parametrize("serialize", ["human", "none"])
+def test__cli__lint_bench_output_without_payload_includes_timings(serialize):
+    """--bench should still report timings when stdout carries no payload."""
+    result = invoke_assert_code(
+        ret_code=0,
+        args=[
+            lint,
+            [
+                "--format",
+                serialize,
+                "--bench",
+                "--disable-progress-bar",
+                "test/fixtures/cli/passing_a.sql",
+            ],
+        ],
+    )
+    assert "==== overall timings ====" in result.stdout
+
+
+def test__cli__lint_bench_with_write_output_keeps_stdout_payload(tmp_path):
+    """--bench should not be written into the --write-output file."""
+    target_file = os.path.join(tmp_path, "out.json")
+    result = invoke_assert_code(
+        ret_code=0,
+        args=[
+            lint,
+            [
+                "--format",
+                "json",
+                "--bench",
+                "--write-output",
+                target_file,
+                "--disable-progress-bar",
+                "test/fixtures/cli/passing_a.sql",
+            ],
+        ],
+    )
+    # With a file target, stdout is re-enabled for human logging.
+    assert "==== overall timings ====" in result.stdout
+    with open(target_file, "r") as payload_file:
+        json.loads(payload_file.read())
+
+
 def test__cli__verbose_machine_output_stays_serialized():
     """Verbose logging should not contaminate machine-readable stdout."""
     result = invoke_assert_code(
