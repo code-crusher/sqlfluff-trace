@@ -11,7 +11,7 @@ This module walks each dialect's grammar from its root segment and checks
 that every ``Ref`` it can reach resolves against the dialect's library.
 """
 
-from typing import Iterator
+from collections.abc import Iterator
 
 import pytest
 
@@ -25,7 +25,126 @@ from sqlfluff.core.parser.segments.base import BaseSegment
 # will be raised as soon as a user's SQL reaches the offending branch. The
 # list should only ever shrink - fix the grammar and remove the entry rather
 # than adding new ones.
-UNRESOLVED_REFS: dict[str, set[str]] = {}
+UNRESOLVED_REFS: dict[str, set[str]] = {
+    "bigquery": {
+        # Inherited from ANSI: `AccessObjectSegment`/`AccessPermissionSegment`
+        # reference CATALOG, and the trigger/cast grammar references keywords
+        # BigQuery doesn't have. `AccessSchemaPluralObjectSegment` is also
+        # inherited without BigQuery's own object names.
+        "ActionKeywordSegment",
+        "BeforeKeywordSegment",
+        "CatalogKeywordSegment",
+        "ConstructorKeywordSegment",
+        "DeferrableKeywordSegment",
+        "DeferredKeywordSegment",
+        "EachKeywordSegment",
+        "FormatsKeywordSegment",
+        "FunctionsKeywordSegment",
+        "InitiallyKeywordSegment",
+        "InstanceKeywordSegment",
+        "InsteadKeywordSegment",
+        "MethodKeywordSegment",
+        "OldKeywordSegment",
+        "PoliciesKeywordSegment",
+        "ProceduresKeywordSegment",
+        "ReferencingKeywordSegment",
+        "RoutinesKeywordSegment",
+        "SequencesKeywordSegment",
+        "SpecificKeywordSegment",
+        "StagesKeywordSegment",
+        "StatementKeywordSegment",
+        "StaticKeywordSegment",
+        "StreamsKeywordSegment",
+        "TablesKeywordSegment",
+        "TasksKeywordSegment",
+        "ViewsKeywordSegment",
+    },
+    "clickhouse": {
+        # Inherited access/alter grammar uses keywords ClickHouse never
+        # registers.
+        "ManagementKeywordSegment",
+        "RefreshKeywordSegment",
+        "SettingKeywordSegment",
+    },
+    "duckdb": {
+        # Inherited from Postgres.
+        "Current_sessionKeywordSegment",
+        "ExecutionKeywordSegment",
+    },
+    "greenplum": {
+        # Inherited from Postgres.
+        "Current_sessionKeywordSegment",
+        "ExecutionKeywordSegment",
+    },
+    "impala": {
+        # Inherited CREATE TABLE grammar references an `=` segment and a pool
+        # name reference Impala doesn't define.
+        "=KeywordSegment",
+        "PoolNameReferenceSegment",
+    },
+    "materialize": {
+        # Inherited from Postgres.
+        "ConcurrentlyKeywordSegment",
+    },
+    "oracle": {
+        # Inherited ANSI access grammar plus Oracle's own CREATE USER /
+        # function grammar use keywords Oracle never registers.
+        "AuthenticationKeywordSegment",
+        "BuildKeywordSegment",
+        "CostKeywordSegment",
+        "CredentialKeywordSegment",
+        "ExceptionsKeywordSegment",
+        "FirewallKeywordSegment",
+        "FolderKeywordSegment",
+        "GrainedKeywordSegment",
+        "GraphKeywordSegment",
+        "HashKeywordSegment",
+        "ManagementKeywordSegment",
+        "MetadataKeywordSegment",
+        "NotificationKeywordSegment",
+        "RetentionKeywordSegment",
+        "ScalarKeywordSegment",
+        "SettingsKeywordSegment",
+        "StepKeywordSegment",
+        "TuningKeywordSegment",
+        "TypenameKeywordSegment",
+    },
+    "postgres": {
+        # Inherited from ANSI.
+        "Current_sessionKeywordSegment",
+        "ExecutionKeywordSegment",
+    },
+    "redshift": {
+        # Inherited from Postgres, which clears the ANSI keyword sets.
+        "FormatsKeywordSegment",
+        "PoliciesKeywordSegment",
+    },
+    "snowflake": {
+        # Inherited CREATE CAST / CREATE TRIGGER / FETCH grammar.
+        "AssignmentKeywordSegment",
+        "ConstructorKeywordSegment",
+        "EachKeywordSegment",
+        "InstanceKeywordSegment",
+        "InsteadKeywordSegment",
+        "MethodKeywordSegment",
+        "NewKeywordSegment",
+        "OldKeywordSegment",
+        "ReferencingKeywordSegment",
+        "SpecificKeywordSegment",
+        "StaticKeywordSegment",
+        "TiesKeywordSegment",
+    },
+    "sqlite": {
+        # SQLite replaces the ANSI keyword sets, so inherited CREATE TABLE ...
+        # AS grammar (`WithNoSchemaBindingClauseSegment`,
+        # `WithDataClauseSegment`) and the inherited MERGE grammar reference
+        # keywords it never registers.
+        "BindingKeywordSegment",
+        "DataKeywordSegment",
+        "MatchedKeywordSegment",
+        "SchemaKeywordSegment",
+    },
+}
 
 # The dialects to test, one parametrised case each.
 DIALECT_LABELS = [dialect.label for dialect in dialect_readout()]
@@ -73,11 +192,17 @@ def _unresolved_refs(dialect: Dialect) -> set[str]:
             return
         if isinstance(matchable, Ref):
             name = matchable._ref
-            if name not in dialect._library:
-                unresolved.add(name)
-            elif name not in seen_refs:
+            if name in seen_refs:
+                pass
+            else:
                 seen_refs.add(name)
-                visit(dialect.ref(name))
+                try:
+                    # Resolve it exactly as the parser would at runtime.
+                    target = dialect.ref(name)
+                except RuntimeError:
+                    unresolved.add(name)
+                else:
+                    visit(target)
             # Refs also carry an exclude pattern and terminators.
             for child in _grammar_children(matchable):
                 visit(child)
