@@ -3910,6 +3910,11 @@ class MergeInsertClauseSegment(ansi.MergeInsertClauseSegment):
 class InsertStatementSegment(BaseSegment):
     """An `INSERT` statement.
 
+    Covers single-table inserts as well as unconditional and conditional
+    multi-table inserts. The conditional forms begin with `INSERT ALL` or
+    `INSERT FIRST` (or neither) followed by one or more `WHEN ... THEN ...`
+    clauses and an optional `ELSE` clause.
+
     https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/INSERT.html
     """
 
@@ -3962,14 +3967,39 @@ class InsertStatementSegment(BaseSegment):
         Ref("SelectableGrammar"),
     )
 
+    # A single target of a conditional multi-table insert, optionally with
+    # its own `VALUES` clause.
+    _conditional_insert_into_clause = Sequence(
+        _insert_into_clause,
+        Ref("ValuesClauseSegment", optional=True),
+    )
+
+    _conditional_insert_when_clause = Sequence(
+        "WHEN",
+        Ref("ExpressionSegment"),
+        "THEN",
+        Indent,
+        AnyNumberOf(_conditional_insert_into_clause, min_times=1),
+        Dedent,
+    )
+
+    _conditional_insert_else_clause = Sequence(
+        "ELSE",
+        Indent,
+        AnyNumberOf(_conditional_insert_into_clause, min_times=1),
+        Dedent,
+    )
+
     match_grammar: Matchable = Sequence(
         "INSERT",
         OneOf(
+            # single_table_insert
             Sequence(
                 _insert_into_clause,
                 OneOf(*_insert_set_or_values_clause, _by_name_position_subquery_clause),
                 _error_logging_clause,
             ),
+            # unconditional_multi_table_insert
             Sequence(
                 "ALL",
                 AnyNumberOf(
@@ -3981,6 +4011,15 @@ class InsertStatementSegment(BaseSegment):
                     min_times=1,
                 ),
                 _by_name_position_subquery_clause,
+                _error_logging_clause,
+            ),
+            # conditional_multi_table_insert
+            Sequence(
+                OneOf("ALL", "FIRST", optional=True),
+                AnyNumberOf(_conditional_insert_when_clause, min_times=1),
+                Sequence(_conditional_insert_else_clause, optional=True),
+                _by_name_position_subquery_clause,
+                _error_logging_clause,
             ),
         ),
     )

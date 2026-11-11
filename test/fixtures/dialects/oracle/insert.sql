@@ -129,3 +129,11 @@ INSERT ALL
     FROM   dual
   )
   SELECT * FROM names;
+
+INSERT ALL
+  INTO people (person_id, given_name, family_name, title)
+    VALUES (id, given_name, family_name, title)
+  INTO staff (staff_id, hired_date)
+    VALUES (id, hired_date)
+  SELECT id, given_name, family_name, title, hired_date FROM names
+  LOG ERRORS INTO err$_people ('multi') REJECT LIMIT UNLIMITED;

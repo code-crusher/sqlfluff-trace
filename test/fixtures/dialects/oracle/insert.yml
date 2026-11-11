@@ -3,7 +3,7 @@
 # computed by SQLFluff when running the tests. Please run
 # `python test/generate_parse_fixture_yml.py`  to generate them after adding or
 # altering SQL files.
-_hash: dc3bd04edadee0f4e1b6284495bd269054a3273d3ea6a0cfbbf2afd25b6c9f21
+_hash: 98c2875c3b1f6f3a7e3e568b563a5a1fb50bad2b3fe4f36c3baafa2fb1cd4138
 file:
   batch:
   - statement:
@@ -1620,4 +1620,111 @@ file:
                   table_expression:
                     table_reference:
                       naked_identifier: names
+  - statement_terminator: ;
+  - statement:
+      insert_statement:
+      - keyword: INSERT
+      - keyword: ALL
+      - keyword: INTO
+      - table_reference:
+          naked_identifier: people
+      - bracketed:
+        - start_bracket: (
+        - column_reference:
+            naked_identifier: person_id
+        - comma: ','
+        - column_reference:
+            naked_identifier: given_name
+        - comma: ','
+        - column_reference:
+            naked_identifier: family_name
+        - comma: ','
+        - column_reference:
+            naked_identifier: title
+        - end_bracket: )
+      - values_clause:
+          keyword: VALUES
+          bracketed:
+          - start_bracket: (
+          - expression:
+              column_reference:
+                naked_identifier: id
+          - comma: ','
+          - expression:
+              column_reference:
+                naked_identifier: given_name
+          - comma: ','
+          - expression:
+              column_reference:
+                naked_identifier: family_name
+          - comma: ','
+          - expression:
+              column_reference:
+                naked_identifier: title
+          - end_bracket: )
+      - keyword: INTO
+      - table_reference:
+          naked_identifier: staff
+      - bracketed:
+        - start_bracket: (
+        - column_reference:
+            naked_identifier: staff_id
+        - comma: ','
+        - column_reference:
+            naked_identifier: hired_date
+        - end_bracket: )
+      - values_clause:
+          keyword: VALUES
+          bracketed:
+          - start_bracket: (
+          - expression:
+              column_reference:
+                naked_identifier: id
+          - comma: ','
+          - expression:
+              column_reference:
+                naked_identifier: hired_date
+          - end_bracket: )
+      - select_statement:
+          select_clause:
+          - keyword: SELECT
+          - select_clause_element:
+              column_reference:
+                naked_identifier: id
+          - comma: ','
+          - select_clause_element:
+              column_reference:
+                naked_identifier: given_name
+          - comma: ','
+          - select_clause_element:
+              column_reference:
+                naked_identifier: family_name
+          - comma: ','
+          - select_clause_element:
+              column_reference:
+                naked_identifier: title
+          - comma: ','
+          - select_clause_element:
+              column_reference:
+                naked_identifier: hired_date
+          from_clause:
+            keyword: FROM
+            from_expression:
+              from_expression_element:
+                table_expression:
+                  table_reference:
+                    naked_identifier: names
+      - keyword: LOG
+      - keyword: ERRORS
+      - keyword: INTO
+      - table_reference:
+          naked_identifier: err$_people
+      - bracketed:
+          start_bracket: (
+          expression:
+            quoted_literal: "'multi'"
+          end_bracket: )
+      - keyword: REJECT
+      - keyword: LIMIT
+      - keyword: UNLIMITED
   - statement_terminator: ;

@@ -1,0 +1,336 @@
+# YML test files are auto-generated from SQL files and should not be edited by
+# hand. To help enforce this, the "hash" field in the file must match a hash
+# computed by SQLFluff when running the tests. Please run
+# `python test/generate_parse_fixture_yml.py`  to generate them after adding or
+# altering SQL files.
+_hash: e98cbe2e6eacb4af3e496b9519b476194a8711aa7182324bc7af9e6d4024e5fc
+file:
+  batch:
+  - statement:
+      insert_statement:
+      - keyword: INSERT
+      - keyword: ALL
+      - keyword: WHEN
+      - expression:
+          column_reference:
+            naked_identifier: order_total
+          comparison_operator:
+          - raw_comparison_operator: <
+          - raw_comparison_operator: '='
+          numeric_literal: '100000'
+      - keyword: THEN
+      - keyword: INTO
+      - table_reference:
+          naked_identifier: small_orders
+      - keyword: WHEN
+      - expression:
+        - column_reference:
+            naked_identifier: order_total
+        - comparison_operator:
+            raw_comparison_operator: '>'
+        - numeric_literal: '100000'
+        - binary_operator: AND
+        - column_reference:
+            naked_identifier: order_total
+        - comparison_operator:
+          - raw_comparison_operator: <
+          - raw_comparison_operator: '='
+        - numeric_literal: '200000'
+      - keyword: THEN
+      - keyword: INTO
+      - table_reference:
+          naked_identifier: medium_orders
+      - bracketed:
+        - start_bracket: (
+        - column_reference:
+            naked_identifier: order_id
+        - comma: ','
+        - column_reference:
+            naked_identifier: order_total
+        - end_bracket: )
+      - values_clause:
+          keyword: VALUES
+          bracketed:
+          - start_bracket: (
+          - expression:
+              column_reference:
+                naked_identifier: order_id
+          - comma: ','
+          - expression:
+              column_reference:
+                naked_identifier: order_total
+          - end_bracket: )
+      - keyword: ELSE
+      - keyword: INTO
+      - table_reference:
+          naked_identifier: large_orders
+      - select_statement:
+          select_clause:
+          - keyword: SELECT
+          - select_clause_element:
+              column_reference:
+                naked_identifier: order_id
+          - comma: ','
+          - select_clause_element:
+              column_reference:
+                naked_identifier: order_total
+          - comma: ','
+          - select_clause_element:
+              column_reference:
+                naked_identifier: customer_id
+          from_clause:
+            keyword: FROM
+            from_expression:
+              from_expression_element:
+                table_expression:
+                  table_reference:
+                    naked_identifier: orders
+  - statement_terminator: ;
+  - statement:
+      insert_statement:
+      - keyword: INSERT
+      - keyword: FIRST
+      - keyword: WHEN
+      - expression:
+          column_reference:
+            naked_identifier: ottl
+          comparison_operator:
+            raw_comparison_operator: <
+          numeric_literal: '100000'
+      - keyword: THEN
+      - keyword: INTO
+      - table_reference:
+          naked_identifier: small_orders
+      - values_clause:
+          keyword: VALUES
+          bracketed:
+          - start_bracket: (
+          - expression:
+              column_reference:
+                naked_identifier: order_id
+          - comma: ','
+          - expression:
+              column_reference:
+                naked_identifier: ottl
+          - end_bracket: )
+      - keyword: WHEN
+      - expression:
+          column_reference:
+            naked_identifier: ottl
+          comparison_operator:
+            raw_comparison_operator: '>'
+          numeric_literal: '100000'
+      - keyword: THEN
+      - keyword: INTO
+      - table_reference:
+          naked_identifier: large_orders
+      - values_clause:
+          keyword: VALUES
+          bracketed:
+          - start_bracket: (
+          - expression:
+              column_reference:
+                naked_identifier: order_id
+          - comma: ','
+          - expression:
+              column_reference:
+                naked_identifier: ottl
+          - end_bracket: )
+      - select_statement:
+          select_clause:
+          - keyword: SELECT
+          - select_clause_element:
+              column_reference:
+                naked_identifier: order_id
+          - comma: ','
+          - select_clause_element:
+              column_reference:
+                naked_identifier: order_total
+              alias_expression:
+                alias_operator:
+                  keyword: AS
+                naked_identifier: ottl
+          from_clause:
+            keyword: FROM
+            from_expression:
+              from_expression_element:
+                table_expression:
+                  table_reference:
+                    naked_identifier: orders
+  - statement_terminator: ;
+  - statement:
+      insert_statement:
+      - keyword: INSERT
+      - keyword: ALL
+      - keyword: WHEN
+      - expression:
+          column_reference:
+            naked_identifier: order_total
+          comparison_operator:
+          - raw_comparison_operator: <
+          - raw_comparison_operator: '='
+          numeric_literal: '100000'
+      - keyword: THEN
+      - keyword: INTO
+      - table_reference:
+          naked_identifier: small_orders
+      - bracketed:
+          start_bracket: (
+          column_reference:
+            naked_identifier: order_id
+          end_bracket: )
+      - values_clause:
+          keyword: VALUES
+          bracketed:
+            start_bracket: (
+            expression:
+              column_reference:
+                naked_identifier: order_id
+            end_bracket: )
+      - keyword: INTO
+      - table_reference:
+          naked_identifier: archived_orders
+      - bracketed:
+          start_bracket: (
+          column_reference:
+            naked_identifier: order_id
+          end_bracket: )
+      - values_clause:
+          keyword: VALUES
+          bracketed:
+            start_bracket: (
+            expression:
+              column_reference:
+                naked_identifier: order_id
+            end_bracket: )
+      - keyword: ELSE
+      - keyword: INTO
+      - table_reference:
+          naked_identifier: large_orders
+      - bracketed:
+          start_bracket: (
+          column_reference:
+            naked_identifier: order_id
+          end_bracket: )
+      - values_clause:
+          keyword: VALUES
+          bracketed:
+            start_bracket: (
+            expression:
+              column_reference:
+                naked_identifier: order_id
+            end_bracket: )
+      - select_statement:
+          select_clause:
+          - keyword: SELECT
+          - select_clause_element:
+              column_reference:
+                naked_identifier: order_id
+          - comma: ','
+          - select_clause_element:
+              column_reference:
+                naked_identifier: order_total
+          from_clause:
+            keyword: FROM
+            from_expression:
+              from_expression_element:
+                table_expression:
+                  table_reference:
+                    naked_identifier: orders
+  - statement_terminator: ;
+  - statement:
+      insert_statement:
+      - keyword: INSERT
+      - keyword: WHEN
+      - expression:
+          column_reference:
+            naked_identifier: order_total
+          comparison_operator:
+          - raw_comparison_operator: <
+          - raw_comparison_operator: '='
+          numeric_literal: '100000'
+      - keyword: THEN
+      - keyword: INTO
+      - table_reference:
+          naked_identifier: small_orders
+      - values_clause:
+          keyword: VALUES
+          bracketed:
+          - start_bracket: (
+          - expression:
+              column_reference:
+                naked_identifier: order_id
+          - comma: ','
+          - expression:
+              column_reference:
+                naked_identifier: order_total
+          - end_bracket: )
+      - select_statement:
+          select_clause:
+          - keyword: SELECT
+          - select_clause_element:
+              column_reference:
+                naked_identifier: order_id
+          - comma: ','
+          - select_clause_element:
+              column_reference:
+                naked_identifier: order_total
+          from_clause:
+            keyword: FROM
+            from_expression:
+              from_expression_element:
+                table_expression:
+                  table_reference:
+                    naked_identifier: orders
+  - statement_terminator: ;
+  - statement:
+      insert_statement:
+      - keyword: INSERT
+      - keyword: ALL
+      - keyword: WHEN
+      - expression:
+          column_reference:
+            naked_identifier: order_total
+          comparison_operator:
+          - raw_comparison_operator: <
+          - raw_comparison_operator: '='
+          numeric_literal: '100000'
+      - keyword: THEN
+      - keyword: INTO
+      - table_reference:
+          naked_identifier: small_orders
+      - keyword: ELSE
+      - keyword: INTO
+      - table_reference:
+          naked_identifier: large_orders
+      - select_statement:
+          select_clause:
+          - keyword: SELECT
+          - select_clause_element:
+              column_reference:
+                naked_identifier: order_id
+          - comma: ','
+          - select_clause_element:
+              column_reference:
+                naked_identifier: order_total
+          from_clause:
+            keyword: FROM
+            from_expression:
+              from_expression_element:
+                table_expression:
+                  table_reference:
+                    naked_identifier: orders
+      - keyword: LOG
+      - keyword: ERRORS
+      - keyword: INTO
+      - table_reference:
+          naked_identifier: err$_orders
+      - bracketed:
+          start_bracket: (
+          expression:
+            quoted_literal: "'conditional'"
+          end_bracket: )
+      - keyword: REJECT
+      - keyword: LIMIT
+      - numeric_literal: '10'
+  - statement_terminator: ;
