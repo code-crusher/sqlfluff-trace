@@ -26,7 +26,22 @@ from sqlfluff.dialects.dialect_ansi import ObjectReferenceSegment
 from sqlfluff.utils.analysis.query import Query
 from sqlfluff.utils.analysis.select import SelectStatementColumnsAndTables
 
-_START_TYPES = ["select_statement", "set_expression", "with_compound_statement"]
+_START_TYPES = [
+    "select_statement",
+    "set_expression",
+    "with_compound_statement",
+    # DML statements can contain subqueries which see the DML target table
+    # (and, for UPDATE/DELETE/MERGE with a source, the source tables) as
+    # enclosing tables. They need to be treated like top level queries so
+    # that those subqueries are not mistaken for single table selects.
+    # https://github.com/sqlfluff/sqlfluff/issues/8714
+    "update_statement",
+    "delete_statement",
+    "merge_statement",
+]
+
+# Segment types of DML statements.
+_DML_TYPES = ("update_statement", "delete_statement", "merge_statement")
 
 
 class Rule_RF03(BaseRule):
@@ -121,8 +136,17 @@ class Rule_RF03(BaseRule):
             select_info = selectable.select_info
             if select_info:
                 for alias in select_info.table_aliases:
-                    if subquery and alias.from_expression_element.path_to(
-                        subquery.selectables[0].selectable
+                    if (
+                        subquery
+                        # A DML statement's "from_expression_element" is the
+                        # statement itself, so it contains every subquery in
+                        # it. It is a real target table, not the subquery's
+                        # own alias, so don't skip it.
+                        # https://github.com/sqlfluff/sqlfluff/issues/8714
+                        and not alias.from_expression_element.is_type(*_DML_TYPES)
+                        and alias.from_expression_element.path_to(
+                            subquery.selectables[0].selectable
+                        )
                     ):
                         # Skip the subquery alias itself
                         continue

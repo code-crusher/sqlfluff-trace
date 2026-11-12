@@ -11,7 +11,9 @@ from sqlfluff.core.dialects.base import Dialect
 from sqlfluff.core.dialects.common import (
     AliasInfo,
     get_from_clause_aliases,
+    get_join_clause_aliases,
     is_qualified,
+    iter_raw_references,
 )
 from sqlfluff.core.parser import BaseSegment
 from sqlfluff.dialects.dialect_ansi import ObjectReferenceSegment
@@ -31,11 +33,17 @@ SELECTABLE_TYPES = (
     "select_statement",
 )
 
-# Segment types which are likely to contain a subselect.
-SUBSELECT_TYPES = (
+# Segment types of DML statements, which can contain subselects and read or
+# write tables without having a FROM clause of their own.
+DML_TYPES = (
     "merge_statement",
     "update_statement",
     "delete_statement",
+)
+
+# Segment types which are likely to contain a subselect.
+SUBSELECT_TYPES = (
+    *DML_TYPES,
     # NOTE: Values clauses won't have sub selects, but it's
     # also harmless to look, and they may appear in similar
     # locations. We include them here because they come through
@@ -90,7 +98,17 @@ class Selectable:
             values = Segments(self.selectable)
             alias_expressions = values.children(sp.is_type("alias_expression"))
             table_aliases: list[AliasInfo] = []
-            if alias_expressions:
+            if self.selectable.is_type(*DML_TYPES):
+                # A DML statement names tables without having a SELECT's FROM
+                # clause: its target, and for UPDATE/DELETE/MERGE also the
+                # source tables. Subqueries inside the statement can see all of
+                # them, so record them all here. Otherwise a correlated
+                # subquery which names the target looks like a single table
+                # select.
+                # https://github.com/sqlfluff/sqlfluff/issues/8714
+                dialect_name = self.dialect.name if self.dialect else None
+                table_aliases = _dml_table_aliases(self.selectable, dialect_name)
+            elif alias_expressions:
                 # A VALUES clause carries its alias as a direct child.
                 for alias_expression in alias_expressions:
                     name = (
@@ -108,22 +126,6 @@ class Selectable:
                             None,
                         )
                     )
-            elif values.children(sp.is_type("from_expression")):
-                # In some dialects (e.g. MySQL) the target table(s) of an
-                # UPDATE are parsed as from_expression(s), so their aliases live
-                # inside from_expression_elements (and join clauses, for
-                # multi-table updates) rather than as direct children. Reuse the
-                # canonical from-clause alias resolution instead of re-deriving
-                # aliases here, so joined and nested targets resolve exactly as
-                # they do in a SELECT.
-                # https://github.com/sqlfluff/sqlfluff/issues/6147
-                dialect_name = self.dialect.name if self.dialect else None
-                table_aliases = [
-                    alias
-                    for _, alias in get_from_clause_aliases(
-                        self.selectable, dialect_name
-                    )
-                ]
 
             if not table_aliases:
                 # Preserve the longstanding behavior of always registering
@@ -187,6 +189,112 @@ class Selectable:
         ]
         assert len(alias_info) <= 1
         return alias_info[0] if alias_info else None
+
+
+def _table_reference_alias(
+    table_reference: BaseSegment,
+    alias_expression: Optional[BaseSegment],
+    dialect_name: Optional[str],
+) -> AliasInfo:
+    """Build an AliasInfo for a table reference and its optional alias."""
+    if alias_expression:
+        name = alias_expression.get_child("naked_identifier", "quoted_identifier")
+        if name:
+            return AliasInfo(
+                name.raw_normalized(casefold=False),
+                name,
+                True,
+                table_reference,
+                alias_expression,
+                table_reference,
+            )
+    # Without an alias the table is known by its own (possibly schema
+    # qualified) name.
+    references = list(iter_raw_references(table_reference, dialect_name))
+    if references:
+        last = references[-1]
+        return AliasInfo(
+            last.part, last.segments[0], False, table_reference, None, table_reference
+        )
+    return AliasInfo(
+        "", None, False, table_reference, None, table_reference
+    )  # pragma: no cover
+
+
+def _dml_table_aliases(
+    segment: BaseSegment, dialect_name: Optional[str]
+) -> list[AliasInfo]:
+    """Get the tables a DML statement names itself.
+
+    A DML statement has no SELECT-style ``FROM`` clause for its target, so the
+    target and any source tables (the ``USING`` clause of ``DELETE``/``MERGE``,
+    the ``FROM`` clause of ``UPDATE``) appear as direct children instead. Walk
+    those children without descending into subqueries, which are analysed as
+    separate queries of their own.
+    """
+    aliases: list[AliasInfo] = []
+    children = [seg for seg in segment.segments if seg.is_code]
+    # In some dialects (e.g. MySQL) the targets of an UPDATE parse as
+    # from_expressions directly under the statement rather than in a
+    # from_clause. Resolve those the same way as a SELECT's FROM clause.
+    if any(child.is_type("from_expression") for child in children):
+        aliases += [
+            alias for _, alias in get_from_clause_aliases(segment, dialect_name)
+        ]
+    for idx, child in enumerate(children):
+        if child.is_type("from_clause"):
+            # `UPDATE ... FROM` / `DELETE ... USING`.
+            aliases += [
+                alias for _, alias in get_from_clause_aliases(child, dialect_name)
+            ]
+        elif child.is_type("join_clause"):
+            # e.g. a postgres `DELETE ... USING ... JOIN`.
+            aliases += [
+                alias for _, alias in get_join_clause_aliases(child, dialect_name)
+            ]
+        elif child.is_type("table_reference", "table_expression", "bracketed"):
+            # The target, a `USING` source, or a MERGE source. Its alias, if
+            # any, is the next code child (e.g. `UPDATE t AS x`).
+            alias_expression = None
+            if idx + 1 < len(children) and children[idx + 1].is_type(
+                "alias_expression"
+            ):
+                alias_expression = children[idx + 1]
+            table_reference = (
+                child
+                if child.is_type("table_reference")
+                else child.get_child("table_reference")
+            )
+            if table_reference:
+                aliases.append(
+                    _table_reference_alias(
+                        table_reference, alias_expression, dialect_name
+                    )
+                )
+            elif alias_expression and (
+                # A source which isn't a plain table, e.g. a function or a
+                # bracketed subquery in a MERGE. It's only known by its alias.
+                child.is_type("table_expression")
+                or (
+                    child.is_type("bracketed")
+                    and any(child.recursive_crawl(*SELECTABLE_TYPES))
+                )
+            ):
+                name = alias_expression.get_child(
+                    "naked_identifier", "quoted_identifier"
+                )
+                if name:
+                    aliases.append(
+                        AliasInfo(
+                            name.raw_normalized(casefold=False),
+                            name,
+                            True,
+                            child,
+                            alias_expression,
+                            None,
+                        )
+                    )
+    return aliases
 
 
 T = TypeVar("T", bound="Query")
@@ -371,6 +479,11 @@ class Query(Generic[T]):
                 # want to look straight through to those child
                 # expressions.
                 "select_statement",
+                # A WITH statement can also introduce a DML statement, e.g.
+                # `WITH c AS (...) UPDATE ...`. Treat the DML statement like
+                # the main select so that subqueries inside it see its tables.
+                # https://github.com/sqlfluff/sqlfluff/issues/8714
+                *DML_TYPES,
                 recurse_into=False,
                 no_recursive_seg_type="common_table_expression",
             ):

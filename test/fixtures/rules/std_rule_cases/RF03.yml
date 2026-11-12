@@ -1634,3 +1634,193 @@ test_fail_sqlite_order_by_function_with_unqualified_reference:
   configs:
     core:
       dialect: sqlite
+
+test_pass_postgres_update_where_subquery_correlated_unqualified_8714:
+  # The subquery can see the target table of the UPDATE, so removing the
+  # qualifiers would turn `l.id = o.id` into `id = id`.
+  # https://github.com/sqlfluff/sqlfluff/issues/8714
+  pass_str: |
+    update orders as o
+    set x = 1
+    where exists (
+        select 1 from lines as l where l.id = o.id
+    );
+  configs:
+    core:
+      dialect: postgres
+    rules:
+      references.consistent:
+        single_table_references: unqualified
+
+test_pass_postgres_update_set_subquery_correlated_unqualified_8714:
+  # Same as above, for a subquery in the SET clause.
+  pass_str: |
+    update orders as o
+    set x = (
+        select l.x from lines as l where l.id = o.id
+    );
+  configs:
+    core:
+      dialect: postgres
+    rules:
+      references.consistent:
+        single_table_references: unqualified
+
+test_pass_postgres_delete_where_subquery_correlated_unqualified_8714:
+  # Same as above, for DELETE.
+  pass_str: |
+    delete from orders as o
+    where exists (
+        select 1 from lines as l where l.id = o.id
+    );
+  configs:
+    core:
+      dialect: postgres
+    rules:
+      references.consistent:
+        single_table_references: unqualified
+
+test_pass_postgres_update_where_subquery_uncorrelated_unqualified_8714:
+  # Even without a reference to the target table, the subquery can see it, so
+  # its references are not necessarily single table references.
+  pass_str: |
+    update orders as o
+    set x = 1
+    where exists (
+        select 1 from lines as l where l.id = 1
+    );
+  configs:
+    core:
+      dialect: postgres
+    rules:
+      references.consistent:
+        single_table_references: unqualified
+
+test_fail_no_fix_postgres_update_where_subquery_correlated_qualified_8714:
+  # The subquery can see two tables, so adding qualifiers is unsafe too. The
+  # unqualified `id` is still reported, but without a fix.
+  fail_str: |
+    update orders as o
+    set x = 1
+    where exists (
+        select 1 from lines as l where id = o.id
+    );
+  configs:
+    core:
+      dialect: postgres
+    rules:
+      references.consistent:
+        single_table_references: qualified
+
+test_pass_tsql_update_cross_apply_correlated_unqualified_8714:
+  # The APPLY subquery can see both the UPDATE target and the FROM tables.
+  pass_str: |
+    update o
+    set x = s.j
+    from orders as o
+    cross apply (
+        select l.x as j from lines as l where l.id = o.id
+    ) as s;
+  configs:
+    core:
+      dialect: tsql
+    rules:
+      references.consistent:
+        single_table_references: unqualified
+
+test_pass_tsql_merge_correlated_subquery_unqualified_8714:
+  # The subquery can see the MERGE target and source tables.
+  pass_str: |
+    merge into t
+    using s on t.id = s.id
+    when matched then
+        update set t.y = (select m.y from m where m.id = t.id);
+  configs:
+    core:
+      dialect: tsql
+    rules:
+      references.consistent:
+        single_table_references: unqualified
+
+test_pass_tsql_merge_aliased_correlated_subquery_unqualified_8714:
+  # Same as above, with explicit aliases for the MERGE target and source.
+  pass_str: |
+    merge into targets as t
+    using sources as s on t.id = s.id
+    when matched then
+        update set t.y = (select m.y from m where m.id = t.id);
+  configs:
+    core:
+      dialect: tsql
+    rules:
+      references.consistent:
+        single_table_references: unqualified
+
+test_pass_postgres_update_from_correlated_subquery_unqualified_8714:
+  # The subquery can see both the UPDATE target and the FROM table.
+  pass_str: |
+    update orders as o
+    set x = (select l.x from lines as l where l.id = o.id)
+    from lines as l
+    where l.id = o.id;
+  configs:
+    core:
+      dialect: postgres
+    rules:
+      references.consistent:
+        single_table_references: unqualified
+
+test_pass_mysql_update_join_correlated_subquery_unqualified_8714:
+  # The subquery can see both targets of the multi-table UPDATE.
+  pass_str: |
+    update t1 as a
+    inner join t2 as b on a.id = b.id
+    set a.x = (
+        select c.v from t3 as c where c.k = b.id
+    );
+  configs:
+    core:
+      dialect: mysql
+    rules:
+      references.consistent:
+        single_table_references: unqualified
+
+test_pass_postgres_cte_update_correlated_subquery_unqualified_8714:
+  # A WITH statement can introduce an UPDATE. Its subquery sees the target.
+  pass_str: |
+    with c as (select 1 as x)
+    update orders as o
+    set x = 1
+    where exists (
+        select 1 from lines as l where l.id = o.id
+    );
+  configs:
+    core:
+      dialect: postgres
+    rules:
+      references.consistent:
+        single_table_references: unqualified
+
+test_fail_postgres_update_from_uncorrelated_subquery_unqualified_8714:
+  # A subquery in a FROM clause which isn't correlated can't see the outer
+  # tables, so it is still a single table select and can be fixed.
+  fail_str: |
+    update orders as o
+    set x = 1
+    from (
+        select l.id from lines as l
+    ) as s
+    where o.id = s.id;
+  fix_str: |
+    update orders as o
+    set x = 1
+    from (
+        select id from lines as l
+    ) as s
+    where o.id = s.id;
+  configs:
+    core:
+      dialect: postgres
+    rules:
+      references.consistent:
+        single_table_references: unqualified
