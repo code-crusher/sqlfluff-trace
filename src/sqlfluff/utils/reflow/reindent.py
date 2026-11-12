@@ -8,7 +8,7 @@ from itertools import chain
 from typing import DefaultDict, Optional, Union, cast
 
 from sqlfluff.core.errors import SQLFluffUserError
-from sqlfluff.core.helpers.slice import slice_length
+from sqlfluff.core.helpers.slice import slice_length, to_tuple
 from sqlfluff.core.parser import (
     BaseSegment,
     NewlineSegment,
@@ -2107,6 +2107,27 @@ def _calculate_indent_compensation(
     return 0
 
 
+def _source_slice_union_length(source_slices: list[slice]) -> int:
+    """Return the total length covered by a collection of source slices.
+
+    Slices are counted only once, even if they overlap. This matters around
+    template tags: the placeholder for a tag is positioned before the segment
+    which contains it, so their source slices overlap (e.g. a comment
+    containing `{% if %}` has both the placeholder slice and the whole comment
+    slice). Counting them separately would overstate the line length.
+    """
+    total = 0
+    last_stop: Optional[int] = None
+    for start, stop in sorted(to_tuple(s) for s in source_slices):
+        if last_stop is None or start > last_stop:
+            total += stop - start
+            last_stop = stop
+        elif stop > last_stop:
+            total += stop - last_stop
+            last_stop = stop
+    return total
+
+
 def _source_char_len(elements: ReflowSequenceType) -> int:
     """Calculate length in the source file.
 
@@ -2123,6 +2144,10 @@ def _source_char_len(elements: ReflowSequenceType) -> int:
     """
     char_len = 0
     last_source_slice: Optional[slice] = None
+    # Templated slices are collected rather than summed as we go, because
+    # the slice of a template tag placeholder overlaps the slice of the
+    # segment containing it. Summing them would count the tag twice.
+    templated_slices: list[slice] = []
     for seg in chain.from_iterable(elem.segments for elem in elements):
         # Indent tokens occasionally have strange position markers.
         # They also don't have length so skip them.
@@ -2148,7 +2173,13 @@ def _source_char_len(elements: ReflowSequenceType) -> int:
             # smarter about this, but for now this is ok. Without
             # an algorithm for layout out code _within_ jinja tags
             # we won't be able to suggest appropriate fixes.
-            char_len += source_str.index("\n")
+            # NOTE: We only count up to the newline, and add it to the
+            # templated slices so that any overlapping tag placeholders
+            # aren't counted twice.
+            newline_offset = source_str.index("\n")
+            templated_slices.append(
+                slice(source_slice.start, source_slice.start + newline_offset)
+            )
             break
         slice_len = slice_length(source_slice)
         # Only update the length if it's a new slice.
@@ -2169,9 +2200,10 @@ def _source_char_len(elements: ReflowSequenceType) -> int:
                 last_source_slice = source_slice
             # Otherwise assume it's templated code.
             else:
-                char_len += slice_length(source_slice)
+                templated_slices.append(source_slice)
                 last_source_slice = source_slice
 
+    char_len += _source_slice_union_length(templated_slices)
     return char_len
 
 

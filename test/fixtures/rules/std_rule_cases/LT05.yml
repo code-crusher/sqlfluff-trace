@@ -830,13 +830,42 @@ test_fail_no_fix_jinja_macro_with_brackets:
 
 test_fail_no_fix_trailing_comment_with_jinja_block:
   # Moving the comment would drop the tags from the moved copy and only
-  # part of the original would be deleted.
+  # part of the original would be deleted. The source line is 101 characters
+  # long: the placeholder for `{% if %}` overlaps the comment's own source
+  # slice, so counting both would wrongly report 125.
+  # https://github.com/sqlfluff/sqlfluff/issues/8616
   fail_str: "select a, b, c from tbl  -- comment{% if true %} more{% endif %} text here that goes on and on and on\n"
+  violations:
+    - code: LT05
+      description: Line is too long (101 > 80).
+      name: layout.long_lines
+      warning: false
+      fixes: []
+      start_line_no: 1
+      start_line_pos: 1
+      start_file_pos: 0
+      end_line_no: 1
+      end_line_pos: 7
+      end_file_pos: 6
 
 test_fail_no_fix_trailing_comment_with_jinja_set:
   # Moving the comment would leave the original in place, so the comment
-  # would appear twice.
+  # would appear twice. The source line is 92 characters long, not the 107
+  # that counting the tag placeholder separately would give.
+  # https://github.com/sqlfluff/sqlfluff/issues/8616
   fail_str: "select a, b, c from tbl  -- comment{% set q = 1 %} more text here that goes on and on and on\n"
+  violations:
+    - code: LT05
+      description: Line is too long (92 > 80).
+      name: layout.long_lines
+      warning: false
+      fixes: []
+      start_line_no: 1
+      start_line_pos: 1
+      start_file_pos: 0
+      end_line_no: 1
+      end_line_pos: 7
+      end_file_pos: 6
 
 test_fail_no_fix_trailing_comment_with_jinja_block_after:
   # A break before the comment would copy the tags onto the code line.
@@ -844,6 +873,17 @@ test_fail_no_fix_trailing_comment_with_jinja_block_after:
   configs:
     indentation:
       trailing_comments: after
+
+test_pass_trailing_comment_with_jinja_comment_tag:
+  # The source line is 77 characters long, so it is not too long. The
+  # placeholder for the `{# #}` tag sits inside the comment, so its source
+  # slice overlaps the comment's own slice. Counting both would wrongly
+  # report the line as too long.
+  # https://github.com/sqlfluff/sqlfluff/issues/8616
+  pass_str: "select 1 -- note{# x #} this comment text is long enough to put the line over\n"
+  configs:
+    core:
+      max_line_length: 80
 
 test_fail_list_wrapping_fill:
   # With list_wrapping = fill, put as many elements on each line as fit.

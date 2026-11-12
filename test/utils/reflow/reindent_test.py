@@ -24,6 +24,7 @@ from sqlfluff.utils.reflow.reindent import (
     _crawl_indent_points,
     _IndentLine,
     _IndentPoint,
+    _source_slice_union_length,
     lint_indent_points,
 )
 from sqlfluff.utils.reflow.sequence import ReflowSequence
@@ -1071,3 +1072,32 @@ def test_reflow_empty_inline_loop_comma(dialect, count):
         fixed = linter.lint_string(sql, fix=True)
         assert not fixed.violations
         assert fixed.fix_string()[0] == sql
+
+
+@pytest.mark.parametrize(
+    "source_slices,expected_length",
+    [
+        # No slices at all.
+        ([], 0),
+        # Simple, disjoint slices are just summed.
+        ([slice(0, 5), slice(10, 13)], 8),
+        # Adjacent slices aren't double counted either.
+        ([slice(0, 5), slice(5, 8)], 8),
+        # Overlapping slices are only counted once.
+        ([slice(0, 10), slice(3, 7)], 10),
+        # A slice wholly containing another (as with a template tag
+        # placeholder inside a comment).
+        ([slice(16, 23), slice(9, 77)], 68),
+        # Unsorted input is handled.
+        ([slice(53, 64), slice(35, 48), slice(25, 101)], 76),
+    ],
+)
+def test_source_slice_union_length(source_slices, expected_length):
+    """Overlapping source slices must only be counted once.
+
+    The placeholder for a template tag is positioned before the segment
+    which contains it, so their source slices overlap. Counting each
+    separately would overstate the line length.
+    https://github.com/sqlfluff/sqlfluff/issues/8616
+    """
+    assert _source_slice_union_length(source_slices) == expected_length
