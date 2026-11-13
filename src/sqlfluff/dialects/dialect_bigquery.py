@@ -16,6 +16,7 @@ from sqlfluff.core.parser import (
     Bracketed,
     BracketedSegment,
     CodeSegment,
+    Conditional,
     Dedent,
     Delimited,
     IdentifierSegment,
@@ -426,7 +427,11 @@ bigquery_dialect.replace(
     AccessorGrammar=Sequence(
         AnyNumberOf(
             Ref("ArrayAccessorSegment"),
-            Ref("ChainedFunctionCallSegment"),
+            Sequence(
+                Conditional(ImplicitIndent, indented_chained_functions=True),
+                AnyNumberOf(Ref("ChainedFunctionCallSegment"), min_times=1),
+                Conditional(Dedent, indented_chained_functions=True),
+            ),
             # Add in semi structured expressions
             Ref("SemiStructuredAccessorSegment"),
         ),
